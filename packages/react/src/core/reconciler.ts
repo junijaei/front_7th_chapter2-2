@@ -46,7 +46,7 @@ export const reconcile = (
  * 새 노드를 DOM에 마운트합니다.
  */
 const mount = (parentDom: HTMLElement, node: VNode, path: string): Instance => {
-  const { type, key, props } = node;
+  const { type, key, props = {} } = node || {};
 
   // Fragment 처리
   if (type === Fragment) {
@@ -137,10 +137,10 @@ const mount = (parentDom: HTMLElement, node: VNode, path: string): Instance => {
  * 기존 인스턴스를 새 노드로 업데이트합니다.
  */
 const update = (parentDom: HTMLElement, instance: Instance, node: VNode, path: string): Instance => {
-  const { type, props } = node;
+  const { type, props = {} } = node;
 
   // prevProps 저장 (instance.node를 업데이트하기 전에)
-  const prevProps = instance.node.props;
+  const prevProps = instance.node.props || {};
 
   instance.node = node;
   instance.path = path;
