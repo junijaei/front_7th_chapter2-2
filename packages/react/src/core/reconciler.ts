@@ -34,5 +34,31 @@ export const reconcile = (
   // 4. 타입과 키가 같으면 인스턴스를 업데이트합니다. (update)
   //    - DOM 요소: updateDomProps로 속성 업데이트 후 자식 재조정
   //    - 컴포넌트: 컴포넌트 함수 재실행 후 자식 재조정
+  if (node === null) {
+    return unmount(parentDom, instance);
+  }
+  if (instance === null) {
+    return mount(parentDom, instance, node);
+  }
+
   return null;
 };
+
+const unmount = (parentDom: HTMLElement, instance: Instance | null) => {
+  return instance;
+};
+const mount = (parentDom: HTMLElement, instance: Instance | null, node: VNode) => {
+  if (node.type === TEXT_ELEMENT) {
+    const dom = document.createTextNode(node.props.nodeValue);
+    return {
+      kind: "text",
+      dom,
+      children: null,
+      key: null,
+      path: "",
+    };
+  }
+
+  return instance;
+};
+const update = () => {};

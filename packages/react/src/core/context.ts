@@ -15,6 +15,9 @@ export const context: Context = {
     reset({ container, node }) {
       // 여기를 구현하세요.
       // container, node, instance를 전달받은 값으로 초기화합니다.
+      this.container = container;
+      this.instance = null;
+      this.node = node;
     },
   },
 
