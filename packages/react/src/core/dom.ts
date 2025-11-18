@@ -8,6 +8,9 @@ import { Instance } from "./types";
  */
 export const setDomProps = (dom: HTMLElement, props: Record<string, any>): void => {
   // 여기를 구현하세요.
+  Object.keys(props).forEach((key) => {
+    dom.setAttribute(key === "className" ? "class" : key, props[key]);
+  });
 };
 
 /**

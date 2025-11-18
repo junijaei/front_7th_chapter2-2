@@ -21,6 +21,7 @@ export const setup = (rootNode: VNode | null, container: HTMLElement): void => {
   if (!container) throw Error("타깃 엘리먼트가 없습니다.");
   if (!rootNode) throw Error("root node가 없습니다.");
 
-  const instance = reconcile(container, context.root.instance, rootNode);
+  container.innerHTML = "";
   context.root.reset({ container, node: rootNode });
+  render();
 };
