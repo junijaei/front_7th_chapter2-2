@@ -11,10 +11,12 @@ export const normalizeNode = (node: VNode | string | number): VNode | null => {
   // 여기를 구현하세요.
   if (isEmptyValue(node)) return null;
   if (typeof node === "string" || typeof node === "number") return createTextElement(String(node));
-  return {
-    ...node,
-    key: node.key,
-  };
+  if (typeof node === "object" && node.type)
+    return {
+      ...node,
+      key: node.key,
+    };
+  return null;
 };
 
 /**

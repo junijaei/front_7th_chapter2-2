@@ -51,8 +51,7 @@ const mount = (parentDom: HTMLElement, node: VNode, path: string) => {
   const { key } = node;
   if (node.type === TEXT_ELEMENT) {
     const dom = document.createTextNode(node.props.nodeValue);
-    parentDom.appendChild(dom);
-    return {
+    const instance = {
       kind: "text",
       dom,
       children: [],
@@ -60,6 +59,29 @@ const mount = (parentDom: HTMLElement, node: VNode, path: string) => {
       node,
       path,
     } as Instance;
+    insertInstance(parentDom, instance);
+    return instance;
+  }
+
+  if (node.type === Fragment) {
+    const { children } = node.props;
+    const instance = {
+      kind: "fragment",
+      dom: null,
+      children: [],
+      key,
+      path,
+      node,
+    } as Instance;
+    if (children) {
+      instance.children = children
+        .filter((child) => !!child)
+        .map((child, index) => {
+          const childPath = createChildPath(path, child.key, index, child.type);
+          return reconcile(parentDom, null, child, childPath);
+        });
+    }
+    return instance;
   }
 
   if (typeof node.type === "string") {
@@ -69,7 +91,6 @@ const mount = (parentDom: HTMLElement, node: VNode, path: string) => {
 
     setDomProps(dom, props);
 
-    parentDom.appendChild(dom);
     const instance = {
       kind: "host",
       dom,
@@ -80,9 +101,12 @@ const mount = (parentDom: HTMLElement, node: VNode, path: string) => {
     } as Instance;
 
     if (children) {
-      instance.children = children.map((child) => {
-        return reconcile(dom, null, child, path);
-      });
+      instance.children = children
+        .filter((child) => !!child)
+        .map((child, index) => {
+          const childPath = createChildPath(path, child.key, index, child.type);
+          return reconcile(dom, null, child, childPath);
+        });
     }
 
     insertInstance(parentDom, instance);
@@ -93,7 +117,7 @@ const mount = (parentDom: HTMLElement, node: VNode, path: string) => {
     const newVNode = node.type(node.props);
 
     const childInstance = reconcile(parentDom, null, newVNode, path);
-    return {
+    const instance = {
       kind: "component",
       dom: null,
       children: [childInstance],
@@ -101,6 +125,7 @@ const mount = (parentDom: HTMLElement, node: VNode, path: string) => {
       node,
       path,
     } as Instance;
+    return instance;
   }
 
   throw new Error(`알 수 없는 노드 타입: ${String(node.type)}`);
