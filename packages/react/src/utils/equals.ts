@@ -5,7 +5,17 @@
 export const shallowEquals = (a: unknown, b: unknown): boolean => {
   // 여기를 구현하세요.
   // Object.is(), Array.isArray(), Object.keys() 등을 활용하여 1단계 깊이의 비교를 구현합니다.
-  return a === b;
+  if (typeof a === "object" && a && b) {
+    if (Array.isArray(a)) {
+      if (!Array.isArray(b)) return false;
+      return a.every((el, i) => Object.is(el, b[i]));
+    } else {
+      return Object.entries(a).every(([key, item]) => {
+        return Object.is(item, b?.[key]);
+      });
+    }
+  }
+  return Object.is(a, b);
 };
 
 /**
@@ -15,5 +25,15 @@ export const shallowEquals = (a: unknown, b: unknown): boolean => {
 export const deepEquals = (a: unknown, b: unknown): boolean => {
   // 여기를 구현하세요.
   // 재귀적으로 deepEquals를 호출하여 중첩된 구조를 비교해야 합니다.
-  return a === b;
+  if (typeof a === "object" && a && b) {
+    if (Array.isArray(a)) {
+      if (!Array.isArray(b)) return false;
+      return a.every((el, i) => deepEquals(el, b[i]));
+    } else {
+      return Object.entries(a).every(([key, item]) => {
+        return deepEquals(item, b?.[key]);
+      });
+    }
+  }
+  return Object.is(a, b);
 };
