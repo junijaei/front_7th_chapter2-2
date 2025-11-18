@@ -38,7 +38,7 @@ export const reconcile = (
     return unmount(parentDom, instance);
   }
   if (instance === null) {
-    return mount(parentDom, instance, node);
+    return mount(parentDom, node, path);
   }
 
   return null;
@@ -47,18 +47,62 @@ export const reconcile = (
 const unmount = (parentDom: HTMLElement, instance: Instance | null) => {
   return instance;
 };
-const mount = (parentDom: HTMLElement, instance: Instance | null, node: VNode) => {
+const mount = (parentDom: HTMLElement, node: VNode, path: string) => {
+  const { key } = node;
   if (node.type === TEXT_ELEMENT) {
     const dom = document.createTextNode(node.props.nodeValue);
+    parentDom.appendChild(dom);
     return {
       kind: "text",
       dom,
-      children: null,
-      key: null,
-      path: "",
-    };
+      children: [],
+      key,
+      node,
+      path,
+    } as Instance;
   }
 
-  return instance;
+  if (typeof node.type === "string") {
+    const dom = document.createElement(node.type);
+
+    const { children, ...props } = node.props;
+
+    setDomProps(dom, props);
+
+    parentDom.appendChild(dom);
+    const instance = {
+      kind: "host",
+      dom,
+      children: [],
+      key,
+      node,
+      path,
+    } as Instance;
+
+    if (children) {
+      instance.children = children.map((child) => {
+        return reconcile(dom, null, child, path);
+      });
+    }
+
+    insertInstance(parentDom, instance);
+    return instance;
+  }
+
+  if (typeof node.type === "function") {
+    const newVNode = node.type(node.props);
+
+    const childInstance = reconcile(parentDom, null, newVNode, path);
+    return {
+      kind: "component",
+      dom: null,
+      children: [childInstance],
+      key,
+      node,
+      path,
+    } as Instance;
+  }
+
+  throw new Error(`알 수 없는 노드 타입: ${String(node.type)}`);
 };
 const update = () => {};
