@@ -7,17 +7,26 @@ import { Fragment, TEXT_ELEMENT } from "./constants";
  * 주어진 노드를 VNode 형식으로 정규화합니다.
  * null, undefined, boolean, 배열, 원시 타입 등을 처리하여 일관된 VNode 구조를 보장합니다.
  */
-export const normalizeNode = (node: VNode): VNode | null => {
+export const normalizeNode = (node: VNode | string | number): VNode | null => {
   // 여기를 구현하세요.
-  return null;
+  if (isEmptyValue(node)) return null;
+  if (typeof node === "string" || typeof node === "number") return createTextElement(String(node));
+  return {
+    ...node,
+    key: node.key,
+  };
 };
 
 /**
  * 텍스트 노드를 위한 VNode를 생성합니다.
  */
-const createTextElement = (node: VNode): VNode => {
+const createTextElement = (text: string): VNode => {
   // 여기를 구현하세요.
-  return {} as VNode;
+  return {
+    type: TEXT_ELEMENT,
+    key: null,
+    props: { children: [], nodeValue: text },
+  } as VNode;
 };
 
 /**
@@ -30,6 +39,21 @@ export const createElement = (
   ...rawChildren: any[]
 ) => {
   // 여기를 구현하세요.
+
+  const { key = null, ...props } = originProps || {};
+  const children = rawChildren
+    .flat(Infinity)
+    .map(normalizeNode)
+    .filter((c) => c !== null);
+
+  return {
+    type,
+    key,
+    props: {
+      ...props,
+      children: children?.length ? children : undefined,
+    },
+  };
 };
 
 /**
