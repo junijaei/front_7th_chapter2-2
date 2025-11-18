@@ -37,7 +37,7 @@ export const createElement = (
   type: string | symbol | React.ComponentType<any>,
   originProps?: Record<string, any> | null,
   ...rawChildren: any[]
-) => {
+): VNode => {
   // 여기를 구현하세요.
 
   const { key = null, ...props } = originProps || {};
