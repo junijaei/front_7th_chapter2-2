@@ -9,7 +9,27 @@ import { Instance } from "./types";
 export const setDomProps = (dom: HTMLElement, props: Record<string, any>): void => {
   // 여기를 구현하세요.
   Object.keys(props).forEach((key) => {
-    dom.setAttribute(key === "className" ? "class" : key, props[key]);
+    const value = props[key];
+    if (key === "className") {
+      dom.setAttribute("class", value);
+      return;
+    }
+    if (key === "style") {
+      Object.entries(value).forEach(([styleKey, styleValue]) => {
+        (dom.style as any)[styleKey] = styleValue;
+      });
+      return;
+    }
+    if (key.startsWith("on") && typeof value === "function") {
+      const eventName = key.toLowerCase().substring(2);
+      dom.addEventListener(eventName, value);
+      return;
+    }
+    if (typeof value === "boolean") {
+      if (value) dom.setAttribute(key, "");
+      return;
+    }
+    if (value !== null && value !== undefined) dom.setAttribute(key, value);
   });
 };
 
@@ -60,6 +80,8 @@ export const insertInstance = (
   anchor: HTMLElement | Text | null = null,
 ): void => {
   // 여기를 구현하세요.
+  if (!instance?.dom) return;
+  parentDom.appendChild(instance.dom);
 };
 
 /**
