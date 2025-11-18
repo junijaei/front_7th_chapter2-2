@@ -68,5 +68,10 @@ export const createChildPath = (
   siblings?: VNode[],
 ): string => {
   // 여기를 구현하세요.
-  return "";
+
+  const prefix = parentPath ? `${parentPath}.` : "";
+  if (key) return `${prefix}${key}`;
+  if (typeof nodeType === "function" && nodeType.name) return `${prefix}${nodeType.name}`;
+
+  return `${prefix}${index}`;
 };
