@@ -12,6 +12,7 @@ export const render = (): void => {
   // 여기를 구현하세요.
   // 1. 훅 컨텍스트를 초기화합니다.
   context.hooks.visited.clear(); // ??
+  context.hooks.cursor.clear(); // ??
   // 2. reconcile 함수를 호출하여 루트 노드를 재조정합니다.
   const newInstance = reconcile(context.root.container!, context.root.instance, context.root.node, "");
   context.root.instance = newInstance;
