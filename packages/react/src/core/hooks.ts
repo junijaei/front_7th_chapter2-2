@@ -24,8 +24,25 @@ export const useState = <T>(initialValue: T | (() => T)): [T, (nextValue: T | ((
   //    - 새 값이 이전 값과 같으면(Object.is) 재렌더링을 건너뜁니다.
   //    - 값이 다르면 상태를 업데이트하고 재렌더링을 예약(enqueueRender)합니다.
   // 4. 훅 커서를 증가시키고 [상태, setter]를 반환합니다.
-  const setState = (nextValue: T | ((prev: T) => T)) => {};
-  return [initialValue as T, setState];
+
+  const path = context.hooks.currentPath;
+  const hooks = context.hooks.currentHooks;
+  const cursor = context.hooks.currentCursor;
+
+  if (hooks[cursor] === undefined) {
+    hooks[cursor] = typeof initialValue === "function" ? (initialValue as () => T)() : initialValue;
+  }
+
+  const currentCursor = cursor;
+  const setState = (nextValue: T | ((prev: T) => T)) => {
+    const next = typeof nextValue === "function" ? (nextValue as (prev: T) => T)(hooks[currentCursor]) : nextValue;
+    if (!shallowEquals(hooks[currentCursor], next)) {
+      hooks[currentCursor] = next;
+      enqueueRender();
+    }
+  };
+  context.hooks.cursor.set(path, cursor + 1);
+  return [hooks[cursor], setState];
 };
 
 /**
