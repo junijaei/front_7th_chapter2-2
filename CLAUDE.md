@@ -1,246 +1,267 @@
 # CLAUDE.md
 
 ALWAYS RESPOND IN KOREAN
+
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Project Overview
 
-This is a React implementation educational project where you build a Mini-React library from scratch to understand React's internal mechanisms. The project is a pnpm monorepo with two packages:
-- `@hanghae-plus/react` - The Mini-React implementation
-- `@hanghae-plus/shopping` - A demo app using the Mini-React library
+This is a learning project that implements React's core features from scratch using vanilla JavaScript/TypeScript. The goal is to understand React's internal workings by implementing Virtual DOM, reconciliation, hooks system, and component lifecycle.
 
-## Commands
+## Learning Context
 
-### Package Manager
-This project uses **pnpm** as the package manager. All npm commands should use pnpm instead.
+**IMPORTANT**: This is a learning repository. When helping the user:
+- Provide guidance and direction rather than complete solutions
+- Ask follow-up questions when requests are unclear or too broad
+- Offer hints that enable self-implementation
+- Reference `.claude/context.md` for detailed learning approach
+
+## Common Commands
 
 ### Testing
-
 ```bash
-# Run all tests in react package (from project root)
-pnpm test
+# Run all tests
+npm test
 
-# Run basic tests only
-pnpm test:basic
+# Basic tests (Phase 1-6)
+npm run test:basic
 
-# Run advanced tests only
-pnpm test:advanced
+# Advanced tests (Phase 7: hooks & HOC)
+npm run test:advanced
 
-# Run specific test file (from packages/react directory)
-pnpm test src/__tests__/basic.equals.test.tsx
-pnpm test src/__tests__/basic.mini-react.test.tsx
-pnpm test src/__tests__/advanced.hooks.test.tsx
-pnpm test src/__tests__/advanced.hoc.test.tsx
-
-# Run tests matching a pattern
-pnpm test -- --testNamePattern="1단계"
-pnpm test -- --testNamePattern="10단계"
-
-# Run tests with UI
-pnpm --filter @hanghae-plus/react test:ui
+# Run specific test file
+npm test -- <test-file-name>
+# Example:
+npm test -- advanced.hooks.test.tsx
+npm test -- basic.mini-react.test.tsx
 ```
 
 ### Development
-
 ```bash
 # Install dependencies
 pnpm install
 
-# Build all packages
-pnpm build
+# Run dev server
+npm run dev
+
+# Build
+npm run build
 
 # Lint and format
-pnpm lint:fix
-pnpm prettier:write
+npm run lint:fix
+npm run prettier:write
 ```
 
 ## Architecture
 
 ### Core Rendering Flow
 
-The Mini-React implementation follows this high-level flow:
+```
+setup() → render() → reconcile() → DOM operations
+   ↓         ↓           ↓
+context   enqueue    mount/update/unmount
+  reset     queue      + child reconciliation
+```
 
-1. **JSX Transform** → VNode creation (`createElement`)
-2. **Setup** → Initialize root context and trigger first render
-3. **Render Cycle** → Reconciliation, hook management, effect scheduling
-4. **Reconciliation** → Diff VNodes and update DOM minimally
-5. **Effect Execution** → Run scheduled effects asynchronously
+1. **setup** (`core/setup.ts`): Initializes root context and triggers first render
+2. **render** (`core/render.ts`): Orchestrates the render cycle, cleans up hooks
+3. **reconcile** (`core/reconciler.ts`): Compares old/new VNodes and updates DOM
+4. **enqueueRender** (`utils/enqueue.ts`): Batches renders using microtask queue
 
-### Key Architectural Concepts
+### Component Path System
 
-#### 1. Path-Based Component Identification
+Each component instance has a unique path (e.g., `"0.c0.i1.c2"`):
+- `c` = child index
+- `i` = array item index
+- Used to isolate hook state per component instance
+- Critical for multi-instance components to maintain separate state
 
-Each component instance is identified by a unique path string (e.g., `"0.cCounter_0.i1"`):
-- `0` - Root
-- `.cCounter_0` - First Counter component at this level
-- `.i1` - Child at index 1
-- `.kMyKey` - Child with explicit key "MyKey"
+### Hook System Architecture
 
-This path system is crucial for:
-- **Hook state storage**: Each component's hooks are stored in a Map keyed by path
-- **Component identity**: Determines if a component is new or being updated
-- **Hook state persistence**: Same path = same component = preserved hook state
-
-#### 2. Global Context Structure
-
-The `context` object (in `core/context.ts`) is the single source of truth containing:
-- **root**: Container element, root VNode, and current Instance tree
-- **hooks**: Hook state maps, cursor tracking, component stack, visited paths
-- **effects**: Queue of effects to execute after render
-
-#### 3. Hook State Management
-
-Hooks rely on **call order** and **component path**:
-- `hooks.state` - Map<path, hookArray> where hookArray[cursor] = hook state
-- `hooks.cursor` - Map<path, number> tracking which hook is currently executing
-- `hooks.componentStack` - Stack of paths showing current component hierarchy
-- `hooks.visited` - Set of paths visited in current render (for cleanup)
-
-When a component calls `useState()` or `useEffect()`:
-1. Get current path from `componentStack`
-2. Get current cursor position
-3. Read/write hook state at `hooks.state.get(path)[cursor]`
-4. Increment cursor for next hook call
-
-#### 4. Reconciliation Strategy
-
-The `reconcile()` function compares old Instance vs new VNode to minimize DOM operations:
-- **Same type + key**: Update existing instance
-- **Different type/key**: Unmount old, mount new
-- **Null node**: Unmount
-- **Null instance**: Mount
-
-For children, it uses positional comparison (index-based) unless keys are provided.
-
-#### 5. Effect Scheduling
-
-`useEffect` uses a two-phase approach:
-1. **During render**: Compare deps, queue effects that need to run
-2. **After render**: Asynchronously execute queued effects via microtask
-
-**Critical implementation detail**:
-- `deps === undefined` means run on **every render**
-- `deps === []` means run **once** (first render only)
-- `deps === [a, b]` means run when a or b changes (shallow comparison)
-
-#### 6. VNode Structure
-
-Every element becomes a VNode:
+**Global Context** (`core/context.ts`):
 ```typescript
-{
-  type: string | symbol | ComponentFunction,
-  key: string | null,
-  props: {
-    children?: VNode[],
-    ...otherProps
+context.hooks = {
+  state: Map<path, hookArray[]>,     // Hook values per component
+  cursor: Map<path, number>,          // Current hook index per component
+  visited: Set<path>,                 // Tracks visited components this render
+  componentStack: string[]            // Call stack for currentPath
+}
+```
+
+**Hook Call Order Enforcement**:
+- Hooks rely on **call order**, not names
+- Each hook call increments the cursor
+- First render: stores initial values at cursor position
+- Re-renders: retrieves values from same cursor position
+- This is why hooks must not be called conditionally
+
+**Hook Execution Flow**:
+```
+Component renders → componentStack.push(path)
+  → useState() called → currentCursor = 0
+  → useState() called → currentCursor = 1
+  → useEffect() called → currentCursor = 2
+Component returns → componentStack.pop()
+```
+
+### Reconciliation Strategy
+
+**Key Matching** (`reconciler.ts`):
+- Compares `instance.node.type` and `instance.key` with new VNode
+- If types/keys differ: unmount old, mount new
+- If same: update in place
+
+**Child Reconciliation**:
+- Maps old children by key for O(1) lookup
+- Processes new children, finding matches or creating new instances
+- Unmounts remaining old children not found in new list
+
+**Anchor Calculation**:
+- When moving/inserting DOM nodes, finds the next sibling DOM element
+- Handles fragments and components (which have no DOM themselves)
+- Ensures correct insertion order
+
+### Fragment Handling
+
+Fragments (`Fragment` symbol):
+- Have `dom: null` (no real DOM node)
+- Children are inserted directly into parent DOM
+- `getFirstDomFromChildren()` traverses fragment tree to find actual DOM
+
+### Effects Queue
+
+Effects run **after** render completes:
+```
+render() → reconcile() → DOM updated
+  → microtask → flushEffects() → run all effects
+```
+
+Stored in `context.effects.queue` as `{path, cursor}` entries.
+
+## Module Responsibilities
+
+### Core Modules
+
+**`core/elements.ts`**: VNode creation and normalization
+- `createElement()`: JSX transform target
+- `normalizeNode()`: Converts primitives/null to VNode
+- `createChildPath()`: Generates unique component paths
+
+**`core/context.ts`**: Global state management
+- Root context (container, root VNode, root Instance)
+- Hooks context (state Map, cursor Map, componentStack)
+- Effects queue
+
+**`core/reconciler.ts`**: Virtual DOM diffing
+- `reconcile()`: Main entry point
+- `mount()`: Create new Instance + DOM
+- `update()`: Update existing Instance
+- `unmount()`: Remove Instance and cleanup
+
+**`core/dom.ts`**: DOM manipulation utilities
+- `setDomProps()`, `updateDomProps()`: Handle attributes, styles, events
+- `insertInstance()`, `removeInstance()`: DOM insertion/removal
+- `getFirstDom()`: Traverse Instance tree to find real DOM node
+
+**`core/hooks.ts`**: Built-in hooks
+- `useState()`: State management with cursor tracking
+- `useEffect()`: Side effects with dependency comparison
+- `cleanupUnusedHooks()`: Remove stale hook state
+
+### Utility Modules
+
+**`utils/equals.ts`**: Comparison functions
+- `shallowEquals()`: For dependency arrays
+- `deepEquals()`: For deep comparisons
+
+**`utils/enqueue.ts`**: Microtask scheduler
+- `withEnqueue()`: Batches function calls to prevent redundant work
+
+**`utils/validators.ts`**: Type guards
+- `isEmptyValue()`: Checks null/undefined/false
+
+### Extended Modules (Phase 7)
+
+**`hooks/*.ts`**: Additional hooks
+- `useRef()`: Mutable ref object
+- `useMemo()`, `useCallback()`: Memoization
+- `useDeepMemo()`, `useAutoCallback()`: Custom variants
+
+**`hocs/*.ts`**: Higher-Order Components
+- `memo()`: Shallow prop comparison
+- `deepMemo()`: Deep prop comparison
+
+## Implementation Phases
+
+The codebase follows a 7-phase implementation plan (see `README.md` for details):
+
+1. VNode and utilities
+2. Context and setup
+3. DOM interface
+4. Render scheduling
+5. Reconciliation
+6. Basic hooks (useState, useEffect)
+7. Advanced hooks and HOC
+
+Tests validate each phase:
+- Phases 1-6: `test:basic`
+- Phase 7: `test:advanced`
+
+## Key Implementation Notes
+
+### useState Implementation
+
+Must capture cursor in closure:
+```typescript
+const currentCursor = cursor; // Capture for setState closure
+const setState = (next) => {
+  const current = hooks[currentCursor]; // Use captured cursor
+  if (!Object.is(current, newValue)) {
+    hooks[currentCursor] = newValue;
+    enqueueRender();
   }
-}
+};
 ```
 
-Special types:
-- `TEXT_ELEMENT` (symbol) - Text nodes
-- `Fragment` (symbol) - Fragment containers
-- String - DOM elements (div, span, etc.)
-- Function - Components
+### Component Function Execution
 
-#### 7. Instance Tree
-
-The Instance tree represents actual rendered state:
+Before calling component function, push path to stack:
 ```typescript
-{
-  kind: NodeType, // TEXT, HOST, COMPONENT, FRAGMENT
-  dom: HTMLElement | Text | null,
-  node: VNode,  // Current VNode
-  children: Instance[],
-  key: string | null,
-  path: string  // Unique path for hook state
-}
+context.hooks.componentStack.push(path);
+const vnode = componentFn(props);
+context.hooks.componentStack.pop();
 ```
 
-### Module Organization
+This makes `context.hooks.currentPath` return the correct path during hook calls.
 
-```
-packages/react/src/
-├── core/           # Core rendering engine
-│   ├── constants.ts   # TEXT_ELEMENT, Fragment, node/hook type enums
-│   ├── types.ts       # TypeScript interfaces
-│   ├── context.ts     # Global state container
-│   ├── elements.ts    # createElement, normalizeNode, createChildPath
-│   ├── reconciler.ts  # mount, update, reconcileChildren
-│   ├── render.ts      # render loop, enqueueRender
-│   ├── hooks.ts       # useState, useEffect, cleanupUnusedHooks
-│   ├── dom.ts         # DOM manipulation utilities
-│   └── setup.ts       # Root initialization
-├── utils/          # Utilities
-│   ├── equals.ts      # shallowEquals, deepEquals
-│   ├── validators.ts  # isEmptyValue
-│   └── enqueue.ts     # Microtask scheduling
-├── client/         # Public API
-│   └── index.ts       # createRoot export
-└── __tests__/      # Test suites
-```
+### Effect Cleanup
 
-## Test Structure
-
-Tests are organized in stages:
-
-**Basic Tests** (`basic.mini-react.test.tsx`):
-- Stage 1-10: Core functionality (rendering, Fragment, props, useState, useEffect, reconciliation, keys, cleanup, edge cases)
-
-**Advanced Tests**:
-- `advanced.hooks.test.tsx` - useRef, useMemo, useCallback, custom hooks
-- `advanced.hoc.test.tsx` - memo, deepMemo HOCs
-
-## Critical Implementation Details
-
-### Never Modify Test Code
-Test files are immutable. All fixes must be in implementation code only.
-
-### Hook Dependency Handling
-When implementing hooks that accept deps (useEffect, useMemo, useCallback):
+Effects may return cleanup functions:
 ```typescript
-// ❌ Wrong - converts undefined to null
-const depsChanged = !prevHook || !shallowEquals(prevHook.deps, deps ?? null);
-
-// ✅ Correct - preserves undefined
-const depsChanged = !prevHook || deps === undefined || !shallowEquals(prevHook.deps, deps);
+const cleanup = effect(); // Run effect, capture cleanup
+hook.cleanup = cleanup;   // Store for next render/unmount
 ```
 
-### Props Comparison in Reconciler
-When updating instances, store prevProps BEFORE modifying instance.node:
-```typescript
-// ✅ Correct order
-const prevProps = instance.node.props;
-instance.node = node;
-updateDomProps(dom, prevProps, props);
-
-// ❌ Wrong - prevProps === props
-instance.node = node;
-const prevProps = instance.node.props;
-updateDomProps(dom, prevProps, props);
-```
-
-### Children in createElement
-Only add children array to props when it has elements:
-```typescript
-// ✅ Correct
-if (normalizedChildren.length > 0) {
-  return { type, key, props: { ...props, children: normalizedChildren } };
-}
-return { type, key, props };
-
-// ❌ Wrong - adds empty children array to function components
-return { type, key, props: { ...props, children: normalizedChildren } };
-```
-
-### Effect Cleanup Order
-1. Run new effects after render (in microtask)
-2. Execute previous cleanup before executing new effect
-3. Run all cleanups for unmounted components
+Before running a new effect or unmounting, call previous cleanup.
 
 ## Documentation
 
-Comprehensive implementation guides are in the `docs/` directory:
-- `01-implementation-guide.md` - Step-by-step implementation roadmap
-- `02-sequence-diagrams.md` - Visual flow diagrams
-- `03-fundamental-knowledge.md` - Core concepts reference
+Comprehensive guides in `docs/`:
+- `01-implementation-guide.md`: Function interfaces and pseudocode
+- `02-sequence-diagrams.md`: Visual flow diagrams
+- `03-fundamental-knowledge.md`: Core concepts
+- `04-06`: Specific implementation guides
+- `07-useState-구현-가이드.md`: useState implementation walkthrough
+
+## Testing Strategy
+
+Tests are written **before** implementation. Read test expectations to understand required behavior:
+- Test files are in `packages/react/src/__tests__/`
+- Use `/** @jsx createElement */` pragma
+- Tests use `flushMicrotasks()` to wait for async effects
+
+Example test inspection:
+```bash
+# See what useState should do:
+cat packages/react/src/__tests__/advanced.hooks.test.tsx
+```
