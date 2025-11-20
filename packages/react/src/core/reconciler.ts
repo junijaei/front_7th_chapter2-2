@@ -1,25 +1,11 @@
 import { context } from "./context";
-import { Fragment, NodeType, NodeTypes, TEXT_ELEMENT } from "./constants";
+import { Fragment, NodeType, TEXT_ELEMENT } from "./constants";
 import { Instance, VNode } from "./types";
-import {
-  getFirstDom,
-  getFirstDomFromChildren,
-  insertInstance,
-  removeInstance,
-  setDomProps,
-  updateDomProps,
-} from "./dom";
-import { createChildPath } from "./elements";
-import { isEmptyValue } from "../utils";
+import { getFirstDom, insertInstance, removeInstance, setDomProps, updateDomProps } from "./dom";
+import { createChildPath, normalizeNode } from "./elements";
 
 /**
  * 이전 인스턴스와 새로운 VNode를 비교하여 DOM을 업데이트하는 재조정 과정을 수행합니다.
- *
- * @param parentDom - 부모 DOM 요소
- * @param instance - 이전 렌더링의 인스턴스
- * @param node - 새로운 VNode
- * @param path - 현재 노드의 고유 경로
- * @returns 업데이트되거나 새로 생성된 인스턴스
  */
 export const reconcile = (
   parentDom: HTMLElement,
@@ -27,34 +13,46 @@ export const reconcile = (
   node: VNode | null,
   path: string,
 ): Instance | null => {
+  // 1. 새 노드가 null이면 기존 인스턴스를 제거합니다
   if (node === null) {
-    // 1. 새 노드가 null이면 기존 인스턴스를 제거합니다. (unmount)
-    return unmount(parentDom, instance);
+    if (instance) removeInstance(parentDom, instance);
+    return null;
   }
+
+  // 2. 기존 인스턴스가 없으면 새 노드를 마운트합니다
   if (instance === null) {
-    // 2. 기존 인스턴스가 없으면 새 노드를 마운트합니다. (mount)
-    return mount(parentDom, node, path);
-  }
-  if (instance.node.type !== node.type || instance.key !== node.key) {
-    // 3. 타입이나 키가 다르면 기존 인스턴스를 제거하고 새로 마운트합니다.
-    unmount(parentDom, instance);
     return mount(parentDom, node, path);
   }
 
-  // 4. 타입과 키가 같으면 인스턴스를 업데이트합니다. (update)
+  // 3. 타입이나 키가 다르면 기존 인스턴스를 제거하고 새로 마운트합니다
+  if (instance.node.type !== node.type || instance.key !== node.key) {
+    // 제거 전에 다음 sibling을 anchor로 저장
+    const firstDom = getFirstDom(instance);
+    const anchor = firstDom?.nextSibling as HTMLElement | Text | null;
+    removeInstance(parentDom, instance);
+    const newInstance = mount(parentDom, node, path);
+    if (newInstance) {
+      insertInstance(parentDom, newInstance, anchor);
+    }
+    return newInstance;
+  }
+
+  // 4. 타입과 키가 같으면 인스턴스를 업데이트합니다
   return update(parentDom, instance, node, path);
 };
 
-const unmount = (parentDom: HTMLElement, instance: Instance | null) => {
-  removeInstance(parentDom, instance);
-  return instance;
-};
-const mount = (parentDom: HTMLElement, node: VNode, path: string) => {
+/**
+ * 새로운 VNode를 DOM으로 마운트합니다.
+ * mount는 DOM을 생성하지만, 자신을 parentDom에 삽입하지 않습니다.
+ * 대신 자식들은 올바른 순서로 삽입됩니다.
+ */
+const mount = (parentDom: HTMLElement, node: VNode, path: string): Instance | null => {
   const { key, props = {}, type } = node;
 
+  // TEXT 노드
   if (type === TEXT_ELEMENT) {
     const dom = document.createTextNode(props.nodeValue);
-    const instance = {
+    return {
       kind: "text",
       dom,
       children: [],
@@ -62,65 +60,53 @@ const mount = (parentDom: HTMLElement, node: VNode, path: string) => {
       node,
       path,
     } as Instance;
-    insertInstance(parentDom, instance);
-    return instance;
   }
 
+  // Fragment
   if (type === Fragment) {
-    const instance = {
+    const children = mountChildren(parentDom, props.children || [], path);
+    return {
       kind: "fragment",
       dom: null,
-      children: [],
+      children,
       key,
       path,
       node,
     } as Instance;
-    if (props.children) {
-      instance.children = props.children
-        .filter((child) => !!child)
-        .map((child, index) => {
-          const childPath = createChildPath(path, child.key, index, child.type);
-          return reconcile(parentDom, null, child, childPath);
-        });
-    }
-    return instance;
   }
 
+  // Host 요소 (div, span 등)
   if (typeof type === "string") {
     const dom = document.createElement(type);
-
     setDomProps(dom, props);
 
-    const instance = {
+    // host 요소의 자식은 dom에 삽입됨
+    const children = mountChildren(dom, props.children || [], path);
+
+    return {
       kind: "host",
       dom,
-      children: [],
+      children,
       key,
       node,
       path,
     } as Instance;
-
-    if (props.children) {
-      instance.children = props.children
-        .filter((child) => !!child)
-        .map((child, index) => {
-          const childPath = createChildPath(path, child.key, index, child.type);
-          return reconcile(dom, null, child, childPath);
-        });
-    }
-
-    insertInstance(parentDom, instance);
-    return instance;
   }
 
+  // 함수형 컴포넌트
   if (typeof type === "function") {
     context.hooks.componentStack.push(path);
     context.hooks.visited.add(path);
-    const newVNode = type(props);
+    const rawVNode = type(props);
+    const childVNode = normalizeNode(rawVNode);
     context.hooks.componentStack.pop();
 
-    const childInstance = reconcile(parentDom, null, newVNode, path);
-    const instance = {
+    // 컴포넌트의 자식 VNode를 마운트 (삽입은 하지 않음 - 호출자가 처리)
+    // 자식이 컴포넌트인 경우 고유한 path를 생성해야 함
+    const childPath = childVNode ? createChildPath(path, childVNode.key, 0, childVNode.type) : path;
+    const childInstance = childVNode ? mount(parentDom, childVNode, childPath) : null;
+
+    return {
       kind: "component",
       dom: null,
       children: [childInstance],
@@ -128,27 +114,52 @@ const mount = (parentDom: HTMLElement, node: VNode, path: string) => {
       node,
       path,
     } as Instance;
-    return instance;
   }
+
   return null;
 };
-const update = (parentDom: HTMLElement, instance: Instance, node: VNode, path: string) => {
-  const instanceKind: NodeType = instance.kind;
-  switch (instanceKind) {
-    case "text": {
-      const oldText = instance.node.props.nodeValue;
-      const newText = node.props.nodeValue;
 
-      if (oldText !== newText) {
+/**
+ * 자식 VNode들을 마운트하고 올바른 순서로 DOM에 삽입합니다.
+ */
+const mountChildren = (parentDom: HTMLElement, children: VNode[], parentPath: string): (Instance | null)[] => {
+  // 1. 모든 자식 인스턴스 생성 (DOM 삽입 없이)
+  const instances = children.map((child, index) => {
+    if (!child) return null;
+    const childPath = createChildPath(parentPath, child.key, index, child.type, children);
+    return mount(parentDom, child, childPath);
+  });
+
+  // 2. 역순으로 DOM 삽입 (올바른 순서 보장)
+  let anchor: HTMLElement | Text | null = null;
+  for (let i = instances.length - 1; i >= 0; i--) {
+    const instance = instances[i];
+    if (!instance) continue;
+    insertInstance(parentDom, instance, anchor);
+    anchor = getFirstDom(instance);
+  }
+
+  return instances;
+};
+
+/**
+ * 기존 인스턴스를 새로운 VNode로 업데이트합니다.
+ */
+const update = (parentDom: HTMLElement, instance: Instance, node: VNode, path: string): Instance => {
+  const kind: NodeType = instance.kind;
+
+  switch (kind) {
+    case "text": {
+      const newText = node.props.nodeValue;
+      if (instance.node.props.nodeValue !== newText) {
         (instance.dom as Text).nodeValue = newText;
       }
       instance.node = node;
       return instance;
     }
+
     case "host": {
-      const oldProps = instance.node.props;
-      const newProps = node.props;
-      updateDomProps(instance.dom as HTMLElement, oldProps, newProps);
+      updateDomProps(instance.dom as HTMLElement, instance.node.props, node.props);
       instance.children = reconcileChildren(
         instance.dom as HTMLElement,
         instance.children,
@@ -158,60 +169,103 @@ const update = (parentDom: HTMLElement, instance: Instance, node: VNode, path: s
       instance.node = node;
       return instance;
     }
+
     case "fragment": {
       instance.children = reconcileChildren(parentDom, instance.children, (node.props.children || []) as VNode[], path);
       instance.node = node;
       return instance;
     }
+
     case "component": {
       context.hooks.componentStack.push(path);
       context.hooks.visited.add(path);
-      const newVNode = (node.type as (props: unknown) => VNode)(node.props || {});
+      const rawVNode = (node.type as (props: unknown) => VNode)(node.props || {});
+      const childVNode = normalizeNode(rawVNode);
       context.hooks.componentStack.pop();
-      const childInstance = reconcile(parentDom, instance.children[0], newVNode, path);
+
+      const oldChildInstance = instance.children[0];
+      // 자식의 고유한 path 생성
+      const childPath = childVNode ? createChildPath(path, childVNode.key, 0, childVNode.type) : path;
+
+      if (childVNode === null) {
+        // 새 자식이 null이면 기존 자식 제거
+        if (oldChildInstance) {
+          removeInstance(parentDom, oldChildInstance);
+        }
+        instance.children[0] = null;
+      } else if (oldChildInstance === null) {
+        // 기존 자식이 null이면 새로 마운트하고 삽입
+        const newChildInstance = mount(parentDom, childVNode, childPath);
+        if (newChildInstance) {
+          insertInstance(parentDom, newChildInstance, null);
+        }
+        instance.children[0] = newChildInstance;
+      } else {
+        // 둘 다 있으면 reconcile
+        instance.children[0] = reconcile(parentDom, oldChildInstance, childVNode, childPath);
+      }
+
       instance.node = node;
-      instance.children = [childInstance];
       return instance;
     }
   }
 };
 
+/**
+ * 이전 자식들과 새로운 자식들을 비교하여 재조정합니다.
+ */
 const reconcileChildren = (
-  dom: HTMLElement,
+  parentDom: HTMLElement,
   oldChildren: (Instance | null)[],
-  newChildren: VNode[] = [],
+  newChildren: VNode[],
   parentPath: string,
-) => {
-  const oldChildrenMap: Record<string, Instance | null> = oldChildren.reduce((acc, oldChild, index) => {
-    if (!oldChild) return acc;
-    const key = oldChild?.key || String(index);
-    return {
-      ...acc,
-      [key]: oldChild,
-    };
-  }, {});
-
-  const newInstances = newChildren
-    .filter((child) => !!child)
-    .map((newChild, index) => {
-      const key = newChild.key || String(index);
-      const oldChild = oldChildrenMap[key] || null;
-      if (oldChild) delete oldChildrenMap[key];
-      const childPath = createChildPath(parentPath, newChild.key, index, newChild.type);
-      return reconcile(dom, oldChild, newChild, childPath);
-    });
-
-  Object.values(oldChildrenMap).forEach((oldChild) => {
-    unmount(dom, oldChild);
+): (Instance | null)[] => {
+  // 1. 이전 자식들을 key로 매핑
+  const oldChildrenMap = new Map<string, Instance>();
+  oldChildren.forEach((child, index) => {
+    if (!child) return;
+    const key = child.key ?? String(index);
+    oldChildrenMap.set(key, child);
   });
 
+  // 2. 새로운 자식들 처리
+  const newInstances = newChildren.map((newChild, index) => {
+    if (!newChild) return null;
+
+    const key = newChild.key ?? String(index);
+    const oldChild = oldChildrenMap.get(key) || null;
+
+    if (oldChild) {
+      oldChildrenMap.delete(key);
+    }
+
+    const childPath = createChildPath(parentPath, newChild.key, index, newChild.type, newChildren);
+
+    // 기존 인스턴스가 있으면 업데이트, 없으면 새로 마운트
+    if (oldChild) {
+      // 타입이나 키가 같으면 업데이트
+      if (oldChild.node.type === newChild.type && oldChild.key === newChild.key) {
+        return update(parentDom, oldChild, newChild, childPath);
+      }
+      // 다르면 제거 후 새로 마운트
+      removeInstance(parentDom, oldChild);
+    }
+
+    return mount(parentDom, newChild, childPath);
+  });
+
+  // 3. 사용되지 않은 이전 자식들 제거
+  oldChildrenMap.forEach((oldChild) => {
+    removeInstance(parentDom, oldChild);
+  });
+
+  // 4. DOM 위치 조정 (역순으로)
+  let anchor: HTMLElement | Text | null = null;
   for (let i = newInstances.length - 1; i >= 0; i--) {
     const instance = newInstances[i];
     if (!instance) continue;
-
-    const nextInstance = newInstances[i + 1];
-    const anchor = nextInstance ? getFirstDom(nextInstance) : null;
-    insertInstance(dom, instance, anchor);
+    insertInstance(parentDom, instance, anchor);
+    anchor = getFirstDom(instance);
   }
 
   return newInstances;
