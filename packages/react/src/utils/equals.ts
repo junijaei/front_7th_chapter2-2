@@ -25,11 +25,13 @@ export const shallowEquals = (a: unknown, b: unknown): boolean => {
 export const deepEquals = (a: unknown, b: unknown): boolean => {
   // 여기를 구현하세요.
   // 재귀적으로 deepEquals를 호출하여 중첩된 구조를 비교해야 합니다.
-  if (typeof a === "object" && a && b) {
+  if (a && b && typeof a === "object" && typeof b === "object") {
     if (Array.isArray(a)) {
       if (!Array.isArray(b)) return false;
+      if (a.length !== b.length) return false;
       return a.every((el, i) => deepEquals(el, b[i]));
     } else {
+      if (Object.keys(a).length !== Object.keys(b).length) return false;
       return Object.entries(a).every(([key, item]) => {
         return deepEquals(item, b?.[key]);
       });
