@@ -47,7 +47,7 @@ export const reconcile = (
  * 대신 자식들은 올바른 순서로 삽입됩니다.
  */
 const mount = (parentDom: HTMLElement, node: VNode, path: string): Instance | null => {
-  const { key, props = {}, type } = node;
+  const { key, props = {}, type } = node || {};
 
   // TEXT 노드
   if (type === TEXT_ELEMENT) {
@@ -98,7 +98,7 @@ const mount = (parentDom: HTMLElement, node: VNode, path: string): Instance | nu
     context.hooks.componentStack.push(path);
     context.hooks.visited.add(path);
     const rawVNode = type(props);
-    const childVNode = normalizeNode(rawVNode);
+    const childVNode = normalizeNode(rawVNode!);
     context.hooks.componentStack.pop();
 
     // 컴포넌트의 자식 VNode를 마운트 (삽입은 하지 않음 - 호출자가 처리)
@@ -146,11 +146,12 @@ const mountChildren = (parentDom: HTMLElement, children: VNode[], parentPath: st
  * 기존 인스턴스를 새로운 VNode로 업데이트합니다.
  */
 const update = (parentDom: HTMLElement, instance: Instance, node: VNode, path: string): Instance => {
+  const { props = {} } = node || {};
   const kind: NodeType = instance.kind;
 
   switch (kind) {
     case "text": {
-      const newText = node.props.nodeValue;
+      const newText = props.nodeValue;
       if (instance.node.props.nodeValue !== newText) {
         (instance.dom as Text).nodeValue = newText;
       }
@@ -159,11 +160,11 @@ const update = (parentDom: HTMLElement, instance: Instance, node: VNode, path: s
     }
 
     case "host": {
-      updateDomProps(instance.dom as HTMLElement, instance.node.props, node.props);
+      updateDomProps(instance.dom as HTMLElement, instance.node.props, props);
       instance.children = reconcileChildren(
         instance.dom as HTMLElement,
         instance.children,
-        (node.props.children || []) as VNode[],
+        (props.children || []) as VNode[],
         path,
       );
       instance.node = node;
@@ -171,7 +172,7 @@ const update = (parentDom: HTMLElement, instance: Instance, node: VNode, path: s
     }
 
     case "fragment": {
-      instance.children = reconcileChildren(parentDom, instance.children, (node.props.children || []) as VNode[], path);
+      instance.children = reconcileChildren(parentDom, instance.children, (props.children || []) as VNode[], path);
       instance.node = node;
       return instance;
     }
@@ -179,7 +180,7 @@ const update = (parentDom: HTMLElement, instance: Instance, node: VNode, path: s
     case "component": {
       context.hooks.componentStack.push(path);
       context.hooks.visited.add(path);
-      const rawVNode = (node.type as (props: unknown) => VNode)(node.props || {});
+      const rawVNode = (node.type as (props: unknown) => VNode)(props);
       const childVNode = normalizeNode(rawVNode);
       context.hooks.componentStack.pop();
 
