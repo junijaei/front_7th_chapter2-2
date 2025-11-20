@@ -7,6 +7,5 @@
  */
 export const isEmptyValue = (value: unknown): boolean => {
   // 여기를 구현하세요.
-  if (typeof value === "number") return false;
-  return !value;
+  return value == null || typeof value === "boolean";
 };

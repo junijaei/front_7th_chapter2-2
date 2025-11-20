@@ -1,5 +1,4 @@
 import { context } from "./context";
-import { getDomNodes, insertInstance } from "./dom";
 import { reconcile } from "./reconciler";
 import { cleanupUnusedHooks } from "./hooks";
 import { enqueue, withEnqueue } from "../utils";

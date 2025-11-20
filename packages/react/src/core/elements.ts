@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { isEmptyValue } from "../utils";
 import { VNode } from "./types";
-import { Fragment, TEXT_ELEMENT } from "./constants";
+import { TEXT_ELEMENT } from "./constants";
 
 /**
  * 주어진 노드를 VNode 형식으로 정규화합니다.
@@ -11,12 +11,7 @@ export const normalizeNode = (node: VNode | string | number): VNode | null => {
   // 여기를 구현하세요.
   if (isEmptyValue(node)) return null;
   if (typeof node === "string" || typeof node === "number") return createTextElement(String(node));
-  if (typeof node === "object" && node.type)
-    return {
-      ...node,
-      key: node.key,
-    };
-  return null;
+  return node;
 };
 
 /**
@@ -42,7 +37,7 @@ export const createElement = (
 ): VNode => {
   // 여기를 구현하세요.
 
-  const { key = null, ...props } = originProps || {};
+  const props = originProps || {};
   const children = rawChildren
     .flat(Infinity)
     .map(normalizeNode)
@@ -50,10 +45,10 @@ export const createElement = (
 
   return {
     type,
-    key,
+    key: props.key || null,
     props: {
       ...props,
-      children: children?.length ? children : undefined,
+      ...(children.length ? { children } : {}),
     },
   };
 };
@@ -67,7 +62,6 @@ export const createChildPath = (
   key: string | null,
   index: number,
   nodeType?: string | symbol | React.ComponentType,
-  siblings?: VNode[],
 ): string => {
   // 여기를 구현하세요.
 
