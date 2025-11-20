@@ -88,7 +88,8 @@ export const getFirstDom = (instance: Instance | null): HTMLElement | Text | nul
   if (!instance) return null;
   if (instance.dom) return instance.dom;
   for (const child of instance.children) {
-    if (child?.dom) return child.dom;
+    const dom = getFirstDom(child);
+    if (dom) return dom;
   }
   return null;
 };
@@ -120,7 +121,8 @@ export const insertInstance = (
   // 여기를 구현하세요.
   const domNodes = getDomNodes(instance);
   domNodes.forEach((dom) => {
-    if (dom.nextSibling === anchor && dom.parentNode === parentDom) return;
+    // 이미 올바른 위치에 있으면 건너뜀
+    if (dom.parentNode === parentDom && dom.nextSibling === anchor) return;
     if (anchor) parentDom.insertBefore(dom, anchor);
     else parentDom.appendChild(dom);
   });

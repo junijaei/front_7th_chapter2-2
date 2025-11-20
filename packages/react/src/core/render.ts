@@ -3,6 +3,7 @@ import { reconcile } from "./reconciler";
 import { cleanupUnusedHooks } from "./hooks";
 import { enqueue, withEnqueue } from "../utils";
 import { EffectHook } from "./types";
+import { insertInstance } from "./dom";
 
 /**
  * 루트 컴포넌트의 렌더링을 수행하는 함수입니다.
@@ -14,8 +15,14 @@ export const render = (): void => {
   context.hooks.visited.clear();
   context.hooks.cursor.clear();
   // 2. reconcile 함수를 호출하여 루트 노드를 재조정합니다.
-  const newInstance = reconcile(context.root.container!, context.root.instance, context.root.node, "");
+  const oldInstance = context.root.instance;
+  const newInstance = reconcile(context.root.container!, oldInstance, context.root.node, "");
   context.root.instance = newInstance;
+
+  // 최초 마운트 시 루트 인스턴스를 컨테이너에 삽입
+  if (!oldInstance && newInstance) {
+    insertInstance(context.root.container!, newInstance, null);
+  }
 
   enqueue(() => {
     const effects = context.effects.queue;
