@@ -87,7 +87,10 @@ export const getFirstDom = (instance: Instance | null): HTMLElement | Text | nul
   // 여기를 구현하세요.
   if (!instance) return null;
   if (instance.dom) return instance.dom;
-  return getFirstDomFromChildren(instance.children);
+  for (const child of instance.children) {
+    if (child?.dom) return child.dom;
+  }
+  return null;
 };
 
 /**
@@ -95,8 +98,12 @@ export const getFirstDom = (instance: Instance | null): HTMLElement | Text | nul
  */
 export const getFirstDomFromChildren = (children: (Instance | null)[]): HTMLElement | Text | null => {
   // 여기를 구현하세요.
+  if (!children) {
+    return null;
+  }
   for (const child of children) {
-    if (child?.dom) return child.dom;
+    const dom = getFirstDom(child);
+    if (dom) return dom;
   }
   return null;
 };
@@ -111,9 +118,12 @@ export const insertInstance = (
   anchor: HTMLElement | Text | null = null,
 ): void => {
   // 여기를 구현하세요.
-  if (!instance?.dom) return;
-  if (anchor) parentDom.insertBefore(instance.dom, anchor);
-  else parentDom.appendChild(instance.dom);
+  const domNodes = getDomNodes(instance);
+  domNodes.forEach((dom) => {
+    if (dom.nextSibling === anchor && dom.parentNode === parentDom) return;
+    if (anchor) parentDom.insertBefore(dom, anchor);
+    else parentDom.appendChild(dom);
+  });
 };
 
 /**
