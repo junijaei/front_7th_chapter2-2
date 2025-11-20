@@ -37,7 +37,7 @@ export const createElement = (
 ): VNode => {
   // 여기를 구현하세요.
 
-  const props = originProps || {};
+  const { key = null, ...props } = originProps || {};
   const children = rawChildren
     .flat(Infinity)
     .map(normalizeNode)
@@ -45,7 +45,7 @@ export const createElement = (
 
   return {
     type,
-    key: props.key || null,
+    key,
     props: {
       ...props,
       ...(children.length ? { children } : {}),
@@ -62,12 +62,22 @@ export const createChildPath = (
   key: string | null,
   index: number,
   nodeType?: string | symbol | React.ComponentType,
+  siblings?: VNode[],
 ): string => {
-  // 여기를 구현하세요.
+  // key가 있으면 key를 사용, 없으면 타입 기반 카운터 사용
+  if (key != null) {
+    return `${parentPath}.k${key}`;
+  }
 
-  const prefix = parentPath ? `${parentPath}.` : "";
-  if (key) return `${prefix}${key}`;
-  if (typeof nodeType === "function" && nodeType.name) return `${prefix}${nodeType.name}`;
+  // 타입이 함수(컴포넌트)인 경우 컴포넌트 이름 사용
+  if (typeof nodeType === "function") {
+    const componentName = nodeType.name || "Component";
+    // 같은 타입의 형제들 중 몇 번째인지 계산
+    const sameTypeCount =
+      siblings?.slice(0, index).filter((sibling) => sibling.type === nodeType && sibling.key == null).length || 0;
+    return `${parentPath}.c${componentName}_${sameTypeCount}`;
+  }
 
-  return `${prefix}${index}`;
+  // 일반적인 경우 인덱스 사용
+  return `${parentPath}.i${index}`;
 };
