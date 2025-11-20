@@ -19,6 +19,7 @@ export const setup = (rootNode: VNode | null, container: HTMLElement): void => {
   if (context.root.instance) {
     removeInstance(container, context.root.instance);
   }
+  cleanupUnusedHooks();
   container.innerHTML = "";
 
   // 3. 루트 컨텍스트와 훅 컨텍스트를 리셋합니다.

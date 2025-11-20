@@ -50,11 +50,10 @@ const unmount = (parentDom: HTMLElement, instance: Instance | null) => {
   return instance;
 };
 const mount = (parentDom: HTMLElement, node: VNode, path: string) => {
-  const { key } = node;
-  const { children, ...props } = node.props;
+  const { key, props = {}, type } = node;
 
-  if (node.type === TEXT_ELEMENT) {
-    const dom = document.createTextNode(node.props.nodeValue);
+  if (type === TEXT_ELEMENT) {
+    const dom = document.createTextNode(props.nodeValue);
     const instance = {
       kind: "text",
       dom,
@@ -67,7 +66,7 @@ const mount = (parentDom: HTMLElement, node: VNode, path: string) => {
     return instance;
   }
 
-  if (node.type === Fragment) {
+  if (type === Fragment) {
     const instance = {
       kind: "fragment",
       dom: null,
@@ -76,8 +75,8 @@ const mount = (parentDom: HTMLElement, node: VNode, path: string) => {
       path,
       node,
     } as Instance;
-    if (children) {
-      instance.children = children
+    if (props.children) {
+      instance.children = props.children
         .filter((child) => !!child)
         .map((child, index) => {
           const childPath = createChildPath(path, child.key, index, child.type);
@@ -87,8 +86,8 @@ const mount = (parentDom: HTMLElement, node: VNode, path: string) => {
     return instance;
   }
 
-  if (typeof node.type === "string") {
-    const dom = document.createElement(node.type);
+  if (typeof type === "string") {
+    const dom = document.createElement(type);
 
     setDomProps(dom, props);
 
@@ -101,8 +100,8 @@ const mount = (parentDom: HTMLElement, node: VNode, path: string) => {
       path,
     } as Instance;
 
-    if (children) {
-      instance.children = children
+    if (props.children) {
+      instance.children = props.children
         .filter((child) => !!child)
         .map((child, index) => {
           const childPath = createChildPath(path, child.key, index, child.type);
@@ -114,10 +113,10 @@ const mount = (parentDom: HTMLElement, node: VNode, path: string) => {
     return instance;
   }
 
-  if (typeof node.type === "function") {
+  if (typeof type === "function") {
     context.hooks.componentStack.push(path);
     context.hooks.visited.add(path);
-    const newVNode = node.type(node.props);
+    const newVNode = type(props);
     context.hooks.componentStack.pop();
 
     const childInstance = reconcile(parentDom, null, newVNode, path);
@@ -131,8 +130,7 @@ const mount = (parentDom: HTMLElement, node: VNode, path: string) => {
     } as Instance;
     return instance;
   }
-
-  throw new Error(`알 수 없는 노드 타입: ${String(node.type)}`);
+  return null;
 };
 const update = (parentDom: HTMLElement, instance: Instance, node: VNode, path: string) => {
   const instanceKind: NodeType = instance.kind;
@@ -154,21 +152,21 @@ const update = (parentDom: HTMLElement, instance: Instance, node: VNode, path: s
       instance.children = reconcileChildren(
         instance.dom as HTMLElement,
         instance.children,
-        node.props.children as VNode[],
+        (node.props.children || []) as VNode[],
         path,
       );
       instance.node = node;
       return instance;
     }
     case "fragment": {
-      instance.children = reconcileChildren(parentDom, instance.children, node.props.children as VNode[], path);
+      instance.children = reconcileChildren(parentDom, instance.children, (node.props.children || []) as VNode[], path);
       instance.node = node;
       return instance;
     }
     case "component": {
       context.hooks.componentStack.push(path);
       context.hooks.visited.add(path);
-      const newVNode = (node.type as (props: unknown) => VNode)(node.props);
+      const newVNode = (node.type as (props: unknown) => VNode)(node.props || {});
       context.hooks.componentStack.pop();
       const childInstance = reconcile(parentDom, instance.children[0], newVNode, path);
       instance.node = node;
@@ -193,13 +191,15 @@ const reconcileChildren = (
     };
   }, {});
 
-  const newInstances = newChildren.map((newChild, index) => {
-    const key = newChild.key || String(index);
-    const oldChild = oldChildrenMap[key] || null;
-    if (oldChild) delete oldChildrenMap[key];
-    const childPath = createChildPath(parentPath, newChild.key, index, newChild.type);
-    return reconcile(dom, oldChild, newChild, childPath);
-  });
+  const newInstances = newChildren
+    .filter((child) => !!child)
+    .map((newChild, index) => {
+      const key = newChild.key || String(index);
+      const oldChild = oldChildrenMap[key] || null;
+      if (oldChild) delete oldChildrenMap[key];
+      const childPath = createChildPath(parentPath, newChild.key, index, newChild.type);
+      return reconcile(dom, oldChild, newChild, childPath);
+    });
 
   Object.values(oldChildrenMap).forEach((oldChild) => {
     unmount(dom, oldChild);
