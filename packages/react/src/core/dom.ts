@@ -8,28 +8,23 @@ import { Instance } from "./types";
 export const setDomProps = (dom: HTMLElement, props: Record<string, any>): void => {
   // 여기를 구현하세요.
   Object.keys(props).forEach((key) => {
-    const value = props[key];
     if (key === "children") return;
-    if (key === "className") {
-      dom.setAttribute("class", value);
-      return;
-    }
-    if (key === "style") {
+
+    const attr = key === "className" ? "class" : key;
+    const value = props[key];
+
+    if (attr === "style") {
       Object.entries(value).forEach(([styleKey, styleValue]) => {
         (dom.style as any)[styleKey] = styleValue;
       });
-      return;
-    }
-    if (key.startsWith("on") && typeof value === "function") {
-      const eventName = key.toLowerCase().substring(2);
+    } else if (attr.startsWith("on") && typeof value === "function") {
+      const eventName = attr.toLowerCase().substring(2);
       dom.addEventListener(eventName, value);
-      return;
-    }
-    if (typeof value === "boolean") {
+    } else if (typeof value === "boolean") {
       if (value) dom.setAttribute(key, "");
-      return;
+    } else if (value !== null && value !== undefined) {
+      dom.setAttribute(attr, value);
     }
-    if (value !== null && value !== undefined) dom.setAttribute(key, value);
   });
 };
 
@@ -42,10 +37,30 @@ export const updateDomProps = (
   prevProps: Record<string, any> = {},
   nextProps: Record<string, any> = {},
 ): void => {
-  // 여기를 구현하세요.
+  // 삭제된 dom props 처리
+  Object.keys(prevProps).forEach((key) => {
+    if (!(key in nextProps)) {
+      const attr = key === "className" ? "class" : key;
+      if (attr.startsWith("on")) {
+        const eventName = attr.toLowerCase().substring(2);
+        dom.removeEventListener(eventName, prevProps[attr]);
+      } else {
+        dom.removeAttribute(attr);
+      }
+    }
+  });
+
+  Object.keys(nextProps).forEach((key) => {
+    if (key.startsWith("on")) {
+      const eventName = key.toLowerCase().substring(2);
+      if (prevProps[key]) dom.removeEventListener(eventName, prevProps[key]);
+      if (nextProps[key] && typeof nextProps[key] === "function") dom.addEventListener(eventName, nextProps[key]);
+    }
+  });
+
   const changedProps = Object.entries(nextProps)
     .filter(([nextKey, nextValue]) => {
-      return !prevProps[nextKey] || prevProps[nextKey] !== nextValue;
+      return !prevProps[nextKey] || prevProps[nextKey] !== nextValue || nextKey.startsWith("on");
     })
     .reduce((acc, [nextKey, nextValue]) => {
       return { ...acc, [nextKey]: nextValue };
@@ -105,6 +120,9 @@ export const insertInstance = (
  */
 export const removeInstance = (parentDom: HTMLElement, instance: Instance | null): void => {
   // 여기를 구현하세요.
+  if (!instance) return;
   const domNodes = getDomNodes(instance);
-  domNodes.forEach((dom) => parentDom.removeChild(dom));
+  domNodes.forEach((dom) => {
+    if (dom.parentNode === parentDom) parentDom.removeChild(dom);
+  });
 };
