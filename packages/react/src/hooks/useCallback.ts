@@ -12,5 +12,8 @@ import { useMemo } from "./useMemo";
 export const useCallback = <T extends (...args: any[]) => any>(callback: T, deps: DependencyList): T => {
   // 여기를 구현하세요.
   // useMemo를 사용하여 구현할 수 있습니다.
-  return callback;
+  const result = useMemo(() => {
+    return callback;
+  }, deps);
+  return result;
 };
