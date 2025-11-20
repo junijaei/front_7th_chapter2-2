@@ -179,7 +179,7 @@ const update = (parentDom: HTMLElement, instance: Instance, node: VNode, path: s
 const reconcileChildren = (
   dom: HTMLElement,
   oldChildren: (Instance | null)[],
-  newChildren: VNode[],
+  newChildren: VNode[] = [],
   parentPath: string,
 ) => {
   const oldChildrenMap: Record<string, Instance | null> = oldChildren.reduce((acc, oldChild, index) => {
@@ -196,7 +196,7 @@ const reconcileChildren = (
     const oldChild = oldChildrenMap[key] || null;
     if (oldChild) delete oldChildrenMap[key];
     const childPath = createChildPath(parentPath, newChild.key, index, newChild.type);
-    return reconcile(dom, oldChildrenMap[key] || null, newChild, childPath);
+    return reconcile(dom, oldChild, newChild, childPath);
   });
 
   Object.values(oldChildrenMap).forEach((oldChild) => {
