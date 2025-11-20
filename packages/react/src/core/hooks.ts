@@ -48,7 +48,7 @@ export const useState = <T>(initialValue: T | (() => T)): [T, (nextValue: T | ((
   const currentCursor = cursor;
   const setState = (nextValue: T | ((prev: T) => T)) => {
     const next = typeof nextValue === "function" ? (nextValue as (prev: T) => T)(hooks[currentCursor]) : nextValue;
-    if (!shallowEquals(hooks[currentCursor], next)) {
+    if (!Object.is(hooks[currentCursor], next)) {
       hooks[currentCursor] = next;
       enqueueRender();
     }

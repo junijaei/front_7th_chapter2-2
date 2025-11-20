@@ -205,5 +205,14 @@ const reconcileChildren = (
     unmount(dom, oldChild);
   });
 
+  for (let i = newInstances.length - 1; i >= 0; i--) {
+    const instance = newInstances[i];
+    if (!instance) continue;
+
+    const nextInstance = newInstances[i + 1];
+    const anchor = nextInstance ? getFirstDom(nextInstance) : null;
+    insertInstance(dom, instance, anchor);
+  }
+
   return newInstances;
 };
