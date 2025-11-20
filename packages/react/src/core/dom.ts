@@ -1,5 +1,4 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { NodeType, NodeTypes } from "./constants";
 import { Instance } from "./types";
 
 /**
@@ -10,6 +9,7 @@ export const setDomProps = (dom: HTMLElement, props: Record<string, any>): void 
   // 여기를 구현하세요.
   Object.keys(props).forEach((key) => {
     const value = props[key];
+    if (key === "children") return;
     if (key === "className") {
       dom.setAttribute("class", value);
       return;
@@ -43,6 +43,14 @@ export const updateDomProps = (
   nextProps: Record<string, any> = {},
 ): void => {
   // 여기를 구현하세요.
+  const changedProps = Object.entries(nextProps)
+    .filter(([nextKey, nextValue]) => {
+      return !prevProps[nextKey] || prevProps[nextKey] !== nextValue;
+    })
+    .reduce((acc, [nextKey, nextValue]) => {
+      return { ...acc, [nextKey]: nextValue };
+    }, {});
+  setDomProps(dom, changedProps);
 };
 
 /**
@@ -51,7 +59,9 @@ export const updateDomProps = (
  */
 export const getDomNodes = (instance: Instance | null): (HTMLElement | Text)[] => {
   // 여기를 구현하세요.
-  return [];
+  if (!instance) return [];
+  if (instance.dom) return [instance.dom];
+  return instance.children.flatMap(getDomNodes);
 };
 
 /**
@@ -59,7 +69,9 @@ export const getDomNodes = (instance: Instance | null): (HTMLElement | Text)[] =
  */
 export const getFirstDom = (instance: Instance | null): HTMLElement | Text | null => {
   // 여기를 구현하세요.
-  return null;
+  if (!instance) return null;
+  if (instance.dom) return instance.dom;
+  return getFirstDomFromChildren(instance.children);
 };
 
 /**
@@ -67,6 +79,9 @@ export const getFirstDom = (instance: Instance | null): HTMLElement | Text | nul
  */
 export const getFirstDomFromChildren = (children: (Instance | null)[]): HTMLElement | Text | null => {
   // 여기를 구현하세요.
+  for (const child of children) {
+    if (child?.dom) return child.dom;
+  }
   return null;
 };
 
@@ -81,7 +96,8 @@ export const insertInstance = (
 ): void => {
   // 여기를 구현하세요.
   if (!instance?.dom) return;
-  parentDom.appendChild(instance.dom);
+  if (anchor) parentDom.insertBefore(instance.dom, anchor);
+  else parentDom.appendChild(instance.dom);
 };
 
 /**
@@ -89,4 +105,6 @@ export const insertInstance = (
  */
 export const removeInstance = (parentDom: HTMLElement, instance: Instance | null): void => {
   // 여기를 구현하세요.
+  const domNodes = getDomNodes(instance);
+  domNodes.forEach((dom) => parentDom.removeChild(dom));
 };
