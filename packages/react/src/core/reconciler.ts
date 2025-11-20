@@ -1,5 +1,5 @@
 import { context } from "./context";
-import { Fragment, NodeTypes, TEXT_ELEMENT } from "./constants";
+import { Fragment, NodeType, NodeTypes, TEXT_ELEMENT } from "./constants";
 import { Instance, VNode } from "./types";
 import {
   getFirstDom,
@@ -27,28 +27,32 @@ export const reconcile = (
   node: VNode | null,
   path: string,
 ): Instance | null => {
-  // 여기를 구현하세요.
-  // 1. 새 노드가 null이면 기존 인스턴스를 제거합니다. (unmount)
-  // 2. 기존 인스턴스가 없으면 새 노드를 마운트합니다. (mount)
-  // 3. 타입이나 키가 다르면 기존 인스턴스를 제거하고 새로 마운트합니다.
-  // 4. 타입과 키가 같으면 인스턴스를 업데이트합니다. (update)
-  //    - DOM 요소: updateDomProps로 속성 업데이트 후 자식 재조정
-  //    - 컴포넌트: 컴포넌트 함수 재실행 후 자식 재조정
   if (node === null) {
+    // 1. 새 노드가 null이면 기존 인스턴스를 제거합니다. (unmount)
     return unmount(parentDom, instance);
   }
   if (instance === null) {
+    // 2. 기존 인스턴스가 없으면 새 노드를 마운트합니다. (mount)
+    return mount(parentDom, node, path);
+  }
+  if (instance.node.type !== node.type || instance.key !== node.key) {
+    // 3. 타입이나 키가 다르면 기존 인스턴스를 제거하고 새로 마운트합니다.
+    unmount(parentDom, instance);
     return mount(parentDom, node, path);
   }
 
-  return null;
+  // 4. 타입과 키가 같으면 인스턴스를 업데이트합니다. (update)
+  return update(parentDom, instance, node, path);
 };
 
 const unmount = (parentDom: HTMLElement, instance: Instance | null) => {
+  removeInstance(parentDom, instance);
   return instance;
 };
 const mount = (parentDom: HTMLElement, node: VNode, path: string) => {
   const { key } = node;
+  const { children, ...props } = node.props;
+
   if (node.type === TEXT_ELEMENT) {
     const dom = document.createTextNode(node.props.nodeValue);
     const instance = {
@@ -64,7 +68,6 @@ const mount = (parentDom: HTMLElement, node: VNode, path: string) => {
   }
 
   if (node.type === Fragment) {
-    const { children } = node.props;
     const instance = {
       kind: "fragment",
       dom: null,
@@ -86,8 +89,6 @@ const mount = (parentDom: HTMLElement, node: VNode, path: string) => {
 
   if (typeof node.type === "string") {
     const dom = document.createElement(node.type);
-
-    const { children, ...props } = node.props;
 
     setDomProps(dom, props);
 
@@ -114,7 +115,9 @@ const mount = (parentDom: HTMLElement, node: VNode, path: string) => {
   }
 
   if (typeof node.type === "function") {
+    context.hooks.componentStack.push(path);
     const newVNode = node.type(node.props);
+    context.hooks.componentStack.pop();
 
     const childInstance = reconcile(parentDom, null, newVNode, path);
     const instance = {
@@ -130,4 +133,75 @@ const mount = (parentDom: HTMLElement, node: VNode, path: string) => {
 
   throw new Error(`알 수 없는 노드 타입: ${String(node.type)}`);
 };
-const update = () => {};
+const update = (parentDom: HTMLElement, instance: Instance, node: VNode, path: string) => {
+  const instanceKind: NodeType = instance.kind;
+  switch (instanceKind) {
+    case "text": {
+      const oldText = instance.node.props.nodeValue;
+      const newText = node.props.nodeValue;
+
+      if (oldText !== newText) {
+        (instance.dom as Text).nodeValue = newText;
+      }
+      instance.node = node;
+      return instance;
+    }
+    case "host": {
+      const oldProps = instance.node.props;
+      const newProps = node.props;
+      updateDomProps(instance.dom as HTMLElement, oldProps, newProps);
+      instance.children = reconcileChildren(
+        instance.dom as HTMLElement,
+        instance.children,
+        node.props.children as VNode[],
+        path,
+      );
+      instance.node = node;
+      return instance;
+    }
+    case "fragment": {
+      instance.children = reconcileChildren(parentDom, instance.children, node.props.children as VNode[], path);
+      instance.node = node;
+      return instance;
+    }
+    case "component": {
+      context.hooks.componentStack.push(path);
+      const newVNode = (node.type as (props: unknown) => VNode)(node.props);
+      context.hooks.componentStack.pop();
+      const childInstance = reconcile(parentDom, instance.children[0], newVNode, path);
+      instance.node = node;
+      instance.children = [childInstance];
+      return instance;
+    }
+  }
+};
+
+const reconcileChildren = (
+  dom: HTMLElement,
+  oldChildren: (Instance | null)[],
+  newChildren: VNode[],
+  parentPath: string,
+) => {
+  const oldChildrenMap: Record<string, Instance | null> = oldChildren.reduce((acc, oldChild, index) => {
+    if (!oldChild) return acc;
+    const key = oldChild?.key || String(index);
+    return {
+      ...acc,
+      [key]: oldChild,
+    };
+  }, {});
+
+  const newInstances = newChildren.map((newChild, index) => {
+    const key = newChild.key || String(index);
+    const oldChild = oldChildrenMap[key] || null;
+    if (oldChild) delete oldChildrenMap[key];
+    const childPath = createChildPath(parentPath, newChild.key, index, newChild.type);
+    return reconcile(dom, oldChildrenMap[key] || null, newChild, childPath);
+  });
+
+  Object.values(oldChildrenMap).forEach((oldChild) => {
+    unmount(dom, oldChild);
+  });
+
+  return newInstances;
+};
