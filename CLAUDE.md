@@ -253,6 +253,16 @@ Comprehensive guides in `docs/`:
 - `04-06`: Specific implementation guides
 - `07-useState-구현-가이드.md`: useState implementation walkthrough
 
+## Feedback Document Guidelines
+
+**IMPORTANT**: When writing feedback documents for user code, ALWAYS refer to `docs/feedback/README.md` for:
+- File naming conventions (YYYYMMDD-HHMM-간단한요약.md)
+- Document structure (현재 코드, 잘한 점, 개선할 점, 학습 포인트, 다음 단계)
+- Tone and style guidelines (긍정적, 격려하는 톤)
+- Code example formatting (Before/After comparisons)
+
+Feedback documents should be saved in `docs/feedback/` directory.
+
 ## Testing Strategy
 
 Tests are written **before** implementation. Read test expectations to understand required behavior:
