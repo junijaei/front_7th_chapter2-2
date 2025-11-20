@@ -60,7 +60,8 @@ export const updateDomProps = (
 
   const changedProps = Object.entries(nextProps)
     .filter(([nextKey, nextValue]) => {
-      return !prevProps[nextKey] || prevProps[nextKey] !== nextValue || nextKey.startsWith("on");
+      if (nextKey.startsWith("on")) return false;
+      return !prevProps[nextKey] || prevProps[nextKey] !== nextValue;
     })
     .reduce((acc, [nextKey, nextValue]) => {
       return { ...acc, [nextKey]: nextValue };

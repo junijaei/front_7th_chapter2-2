@@ -116,6 +116,7 @@ const mount = (parentDom: HTMLElement, node: VNode, path: string) => {
 
   if (typeof node.type === "function") {
     context.hooks.componentStack.push(path);
+    context.hooks.visited.add(path);
     const newVNode = node.type(node.props);
     context.hooks.componentStack.pop();
 
@@ -166,6 +167,7 @@ const update = (parentDom: HTMLElement, instance: Instance, node: VNode, path: s
     }
     case "component": {
       context.hooks.componentStack.push(path);
+      context.hooks.visited.add(path);
       const newVNode = (node.type as (props: unknown) => VNode)(node.props);
       context.hooks.componentStack.pop();
       const childInstance = reconcile(parentDom, instance.children[0], newVNode, path);
